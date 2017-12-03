@@ -4,7 +4,7 @@ from os import system
 import sys,time,math,string,subprocess,copy
 import mido
 
-transpose = 0 + 12
+transpose = -12
 min_duration = 250
 max_duration = 30000
 #voice = 'Zarvox'
@@ -13,14 +13,14 @@ max_duration = 30000
 #voice = 'Kathy'
 #voice = 'Princess'
 
-#voice = 'Alex'
+voice = 'Alex'
 #voice = 'Agnes'
-voice = 'Vicki'
+#voice = 'Vicki'
 #voice = 'Victoria'
 
 outcount = 0
 output_file = ''
-#output_file = '/Users/sehugg/midi/test%d.aiff'
+output_file = '/Users/sehugg/midi/test%d.aiff'
 
 LYRIC_TYPES = ['lyrics', 'text']
 VOCAL_TRACK_NAMES = ['melody', 'lead vocal', 'lead', 'vocal', 'vocals', 'main  melody track',
@@ -124,7 +124,7 @@ def sing_track(track, channels=None, msgs=None, type=None):
                 s += '%% {D %d}\n' % dur
         elif msg.type in ['note_on','note_off'] and note and tms > note_t0 and phrase.strip() != '':
             duration = max(min_duration, tms-note_t0)
-            freq = 440.0 / 10.0 * math.pow(2.0, (note - 49) / 12.0);
+            freq = 440.0 * math.pow(2.0, (note - 69) / 12.0);
             phonlist = get_phoneme_list(phrase)
             print phrase,'\t',note,duration,len(phonlist),round(tuning_error)
             fix_phonemes(phonlist, duration, freq)
