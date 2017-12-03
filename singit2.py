@@ -24,7 +24,7 @@ output_file = ''
 
 LYRIC_TYPES = ['lyrics', 'text']
 VOCAL_TRACK_NAMES = ['melody', 'lead vocal', 'lead', 'vocal', 'vocals', 'main  melody track',
-    'bonnie tyler singing', 'melody/vibraphone']
+    'bonnie tyler singing', 'melody/vibraphone', 'vocal1']
 pitch_correct = 0.85
 tuning_correct = 0.2
 melody_track_idx = -2
@@ -112,28 +112,27 @@ def sing_track(track, channels=None, msgs=None, type=None):
         #print t,tms-note_t0,note,phrase,msg
         if msg.is_meta and msg.type == type:
             phrase += msg.text
-        if msg.type == 'note_on':
-            if msg.velocity > 0:
-                dur = tms-note_t0
-                note = msg.note + transpose
-                if dur > min_duration:
-                    note_t0 += dur
-                    totaldur += dur
-                    if output_file=='':
-                        dur = min(dur,1000)
-                    s += '%% {D %d}\n' % dur
-            elif note and tms > note_t0 and phrase.strip() != '':
-                duration = max(min_duration, tms-note_t0)
-                freq = 440.0 / 10.0 * math.pow(2.0, (note - 49) / 12.0);
-                phonlist = get_phoneme_list(phrase)
-                print phrase,'\t',note,duration,len(phonlist),round(tuning_error)
-                fix_phonemes(phonlist, duration, freq)
-                for l in phonlist[1]:
-                    s += l + '\n'
-                phrase = ''
-                note_t0 += duration
-                totaldur += duration
-                note = 0
+        if msg.type == 'note_on' and msg.velocity > 0:
+            dur = tms-note_t0
+            note = msg.note + transpose
+            if dur > min_duration:
+                note_t0 += dur
+                totaldur += dur
+                if output_file=='':
+                    dur = min(dur,1000)
+                s += '%% {D %d}\n' % dur
+        elif msg.type in ['note_on','note_off'] and note and tms > note_t0 and phrase.strip() != '':
+            duration = max(min_duration, tms-note_t0)
+            freq = 440.0 / 10.0 * math.pow(2.0, (note - 49) / 12.0);
+            phonlist = get_phoneme_list(phrase)
+            print phrase,'\t',note,duration,len(phonlist),round(tuning_error)
+            fix_phonemes(phonlist, duration, freq)
+            for l in phonlist[1]:
+                s += l + '\n'
+            phrase = ''
+            note_t0 += duration
+            totaldur += duration
+            note = 0
     print s
     print note_t0,totaldur
     say(s)
