@@ -4,7 +4,7 @@ from os import system
 import sys,time,math,string,subprocess,copy
 import mido
 
-transpose = 0 #+ 12
+transpose = 0 + 12
 min_duration = 250
 max_duration = 30000
 #voice = 'Zarvox'
@@ -13,9 +13,9 @@ max_duration = 30000
 #voice = 'Kathy'
 #voice = 'Princess'
 
-voice = 'Alex'
+#voice = 'Alex'
 #voice = 'Agnes'
-#voice = 'Vicki'
+voice = 'Vicki'
 #voice = 'Victoria'
 
 outcount = 0
@@ -101,6 +101,7 @@ def sing_track(track, channels=None, msgs=None, type=None):
     note_t0 = 0
     note = 0
     totaldur = 0
+    curfreq = 20
     for msg in track:
         t += msg.time
         #print msg.time,msg,phrase
