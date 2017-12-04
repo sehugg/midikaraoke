@@ -1,12 +1,12 @@
 #!/usr/bin/python
 
 from os import system
-import sys,time,math,string,subprocess,copy
+import sys,time,math,string,subprocess,copy,codecs
 import mido
 
 transpose = 0 - 12
 max_duration = 30000
-pause_duration = 300
+pause_duration = 200
 
 #voice = 'Zarvox'
 #voice = 'Fred'
@@ -25,7 +25,8 @@ output_file = '/Users/sehugg/midi/test%d.aiff'
 
 LYRIC_TYPES = ['lyrics', 'text']
 VOCAL_TRACK_NAMES = ['melody', 'lead vocal', 'lead', 'vocal', 'vocals', 'vocal\'s', 'voice',
-    'main  melody track', 'second melody track', 'guide melody', 'vocal 1', 'vocal 2',
+    'main  melody track', 'second melody track', 'guide melody',
+    'vocal 1', 'vocal 2', 'vocals 1', 'vocals 2',
     'bonnie tyler singing', 'melody/vibraphone', 'vocal1', 'solovox']
 pitch_correct = 0.92
 tuning_correct = 0.10
@@ -150,14 +151,14 @@ def split_phrases(track, channels=None, type=None):
         phrases.append(cur_phrase)
     return phrases
 
-def sing_phrase(p):
-    print p
+def sing_phrase(notetime,p):
+    print unicode(p).encode('utf-8')
     phons = get_phoneme_list(p.text)
     ttsdur = phons[0]
     ttslist = phons[1]
     newlist = []
     newdur = p.notes[-1][2] - p.notes[0][1]
-    print ttsdur,newdur
+    print ttsdur,' ms ->',newdur
     notetime = p.notes[0][1]
     note_idx = 0
     for i in range(0,len(ttslist)):
@@ -185,9 +186,17 @@ def sing_track(track, channels=None, type=None):
         tstart = p.notes[0][1]
         if tstart > t and output_file != '':
             s += '%% {D %d}\n' % (tstart - t)
-        t,l = sing_phrase(p)
-        s += l
+        t,l = sing_phrase(t,p)
+        s += l + '\n'
     print s
+    # verify end time
+    dur = 0
+    for l in s.split('\n'):
+        toks = l.strip().split()
+        if len(toks)>=3:
+            dur += int(toks[2][:-1])
+    print "Endtime:",t,dur
+    assert t == dur
     say(s)
 
 ###
