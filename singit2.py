@@ -20,10 +20,11 @@ voice = 'Alex'
 
 outcount = 0
 output_file = ''
-output_file = '/Users/sehugg/midi/test%d.aiff'
+#output_file = '/Users/sehugg/midi/test%d.aiff'
 
 LYRIC_TYPES = ['lyrics', 'text']
 VOCAL_TRACK_NAMES = ['melody', 'lead vocal', 'lead', 'vocal', 'vocals', 'main  melody track',
+    'voice',
     'bonnie tyler singing', 'melody/vibraphone', 'vocal1']
 pitch_correct = 0.85
 tuning_correct = 0.2

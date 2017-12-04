@@ -4,10 +4,10 @@ from os import system
 import sys,time,math,string,subprocess,copy
 import mido
 
-transpose = 0 - 12 - 12
-min_duration = 250
+transpose = 0 - 12
 max_duration = 30000
-pause_duration = 250
+pause_duration = 300
+
 #voice = 'Zarvox'
 #voice = 'Fred'
 #voice = 'Bruce'
@@ -24,14 +24,14 @@ output_file = ''
 output_file = '/Users/sehugg/midi/test%d.aiff'
 
 LYRIC_TYPES = ['lyrics', 'text']
-VOCAL_TRACK_NAMES = ['melody', 'lead vocal', 'lead', 'vocal', 'vocals', 
-    'main  melody track', 'second melody track',
+VOCAL_TRACK_NAMES = ['melody', 'lead vocal', 'lead', 'vocal', 'vocals', 'vocal\'s', 'voice',
+    'main  melody track', 'second melody track', 'guide melody', 'vocal 1', 'vocal 2',
     'bonnie tyler singing', 'melody/vibraphone', 'vocal1', 'solovox']
 pitch_correct = 0.92
 tuning_correct = 0.10
 melody_track_idx = -2
 fixspaces = 0
-fixslashes = 1
+fixslashes = 0
 
 def say(text):
     global outcount
@@ -117,31 +117,28 @@ def split_phrases(track, channels=None, type=None):
     t = 0
     cur_phrase = Phrase()
     phrases = []
-    xtratext = ''
+    nexttext = ''
     for msg in track:
         t += msg.time
         tms = int(t*1000)
         if channels and hasattr(msg,'channel') and not msg.channel in channels:
             continue
+        #print t,msg,cur_phrase
         if msg.is_meta and msg.type == type and len(msg.text):
             text = msg.text
             if len(text) and not text[0] in ['@','%']:
-                if fixslashes:
-                    for delim in ['/','\\']:
-                        if text.find(delim)>=0:
-                            textfrags = text.split(delim,2)
-                            text = textfrags[0]
-                            xtratext = textfrags[1]
-                cur_phrase.text += text
+                text = text.replace('/',' ').replace('\\',' ')
                 if fixspaces and text[-1] != '-':
-                    cur_phrase.text += ' '
+                    text += ' '
+                nexttext += text
+            #print text,cur_phrase
         if msg.type == 'note_on' and msg.velocity > 0:
             if not note and tms > note_end + pause_duration:
                 if len(cur_phrase.notes):
                     phrases.append(cur_phrase)
                     cur_phrase = Phrase()
-                    cur_phrase.text += xtratext
-                    xtratext = ''
+            cur_phrase.text += nexttext
+            nexttext = ''
             note = msg.note
             note_start = tms
         elif msg.type in ['note_on','note_off']:
