@@ -26,7 +26,7 @@ output_file = '/Users/sehugg/midi/test_%d_%d.aiff'
 LYRIC_TYPES = ['lyrics', 'text']
 VOCAL_TRACK_NAMES = ['melody', 'lead vocal', 'lead', 'vocal', 'vocals', 'vocal\'s', 'voice',
     'main  melody track', 'second melody track', 'guide melody', 'background melody',
-    'vocal 1', 'vocal 2', 'vocals 1', 'vocals 2', 'bkup vocals',
+    'vocal 1', 'vocal 2', 'vocals 1', 'vocals 2', 'bkup vocals', 'backup singers',
     'organ 3', 'lead organ', 'lead organ 3', 'harm 1 organ 3', 'harm 2 organ 3', 'harm 3 organ 3', 'rock organ lead',
     'bonnie tyler singing', 'melody/vibraphone', 'vocal1', 'solovox']
 pitch_correct = 0.92
@@ -34,8 +34,32 @@ tuning_correct = 0.10
 melody_track_idx = -2
 fixspaces = 0
 fixslashes = 0
-max_char_per_sec = 20
+max_char_per_sec = 25
 harmony_index = 0
+
+lyric_substitutions = [
+('You say ', 'Colton '),
+('It\'s my birthday too', 'You\'re nine years old'),
+('I would like you to ', 'Kitty and Daisy will '),
+('Peach', 'Birthday'),
+('peach', 'birthday'),
+('holiday', 'birthday'),
+('Holiday', 'Birthday'),
+('nowhere', 'birthday'),
+('Nowhere', 'Birthday'),
+('of the tiger', 'of Colton\'s birthday'),
+('Ziggy', 'Colton'),
+('Weird', 'Becca'),
+('Gilly', 'Kay-lyn'),
+('hung', 'groomed'),
+('balls', 'butts'),
+('bitched', 'kvetched'),
+('SOS', 'birthday wish'),
+('Message in a bottle','Happy Birthday Cohlton'),
+('Shattered','Birthday'),
+('shattered','birthday'),
+]
+lyric_substitutions = []
 
 def say(text):
     global outcount
@@ -130,7 +154,7 @@ def split_phrases(track, channels=None, type=None):
         tms = int(t*1000)
         if channels and hasattr(msg,'channel') and not msg.channel in channels:
             continue
-        print t,note,notes_on,msg,cur_phrase
+        #print t,note,notes_on,msg,cur_phrase
         if msg.is_meta and msg.type == type and len(msg.text):
             text = msg.text
             if len(text) and not text[0] in ['@','%']:
@@ -146,6 +170,8 @@ def split_phrases(track, channels=None, type=None):
                     pos = cur_phrase.text.find(' DELAYVIBR DELAY ') # Nowhere Man
                     if pos > 0:
                         cur_phrase.text = cur_phrase.text[pos+16:]
+                    for a,b in lyric_substitutions:
+                        cur_phrase.text = cur_phrase.text.replace(a,b)
                     char_per_sec = len(cur_phrase.text) * 1000.0 / cur_phrase.duration()
                     if char_per_sec < max_char_per_sec:
                         phrases.append(cur_phrase)
@@ -210,8 +236,11 @@ def sing_track(track, channels=None, type=None):
     for p in phrases:
         tend = p.notes[-1][2]
         tstart = p.notes[0][1]
-        if tstart > t and output_file != '':
-            s += '%% {D %d}\n' % (tstart - t)
+        dur = tstart - t
+        while dur > 0 and output_file != '':
+            d = min(50000, dur)
+            s += '%% {D %d}\n' % d
+            dur -= d
         t,l = sing_phrase(t,p)
         s += l + '\n'
     print s
