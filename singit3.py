@@ -4,7 +4,7 @@ from os import system
 import sys,time,math,string,subprocess,copy,codecs
 import mido
 
-transpose = 0 - 12
+transpose = 0 - 12 #- 12
 max_duration = 30000
 pause_duration = 200
 
@@ -14,25 +14,28 @@ pause_duration = 200
 #voice = 'Kathy'
 #voice = 'Princess'
 
-voice = 'Alex'
+#voice = 'Alex'
 #voice = 'Agnes'
-#voice = 'Vicki'
+voice = 'Vicki'
 #voice = 'Victoria'
 
 outcount = 0
 output_file = ''
-output_file = '/Users/sehugg/midi/test%d.aiff'
+output_file = '/Users/sehugg/midi/test_%d_%d.aiff'
 
 LYRIC_TYPES = ['lyrics', 'text']
 VOCAL_TRACK_NAMES = ['melody', 'lead vocal', 'lead', 'vocal', 'vocals', 'vocal\'s', 'voice',
-    'main  melody track', 'second melody track', 'guide melody',
-    'vocal 1', 'vocal 2', 'vocals 1', 'vocals 2',
+    'main  melody track', 'second melody track', 'guide melody', 'background melody',
+    'vocal 1', 'vocal 2', 'vocals 1', 'vocals 2', 'bkup vocals',
+    'organ 3', 'lead organ', 'lead organ 3', 'harm 1 organ 3', 'harm 2 organ 3', 'harm 3 organ 3', 'rock organ lead',
     'bonnie tyler singing', 'melody/vibraphone', 'vocal1', 'solovox']
 pitch_correct = 0.92
 tuning_correct = 0.10
 melody_track_idx = -2
 fixspaces = 0
 fixslashes = 0
+max_char_per_sec = 21
+harmony_index = 0
 
 def say(text):
     global outcount
@@ -43,7 +46,7 @@ END""" % (text, voice)
     if output_file != '':
         cmd = """osascript<<END
 say "%s" using "%s" modulation 0 saving to "%s"
-END""" % (text, voice, output_file%outcount)
+END""" % (text, voice, output_file%(outcount,harmony_index))
     response = str(system(cmd))
     outcount += 1
     print response
@@ -110,11 +113,14 @@ class Phrase:
         self.notes = []
     def __repr__(self):
         return '"%s"%s' % (self.text, self.notes)
+    def duration(self):
+        return self.notes[-1][2] - self.notes[0][1]
 
 def split_phrases(track, channels=None, type=None):
     note_start = 0
     note_end = 0
     note = 0
+    notes_on = set()
     t = 0
     cur_phrase = Phrase()
     phrases = []
@@ -124,7 +130,7 @@ def split_phrases(track, channels=None, type=None):
         tms = int(t*1000)
         if channels and hasattr(msg,'channel') and not msg.channel in channels:
             continue
-        #print t,msg,cur_phrase
+        print t,note,notes_on,msg,cur_phrase
         if msg.is_meta and msg.type == type and len(msg.text):
             text = msg.text
             if len(text) and not text[0] in ['@','%']:
@@ -136,13 +142,27 @@ def split_phrases(track, channels=None, type=None):
         if msg.type == 'note_on' and msg.velocity > 0:
             if not note and tms > note_end + pause_duration:
                 if len(cur_phrase.notes):
-                    phrases.append(cur_phrase)
+                    pos = cur_phrase.text.find(' DELAYVIBR DELAY ') # Nowhere Man
+                    if pos > 0:
+                        cur_phrase.text = cur_phrase.text[pos+16:]
+                    char_per_sec = len(cur_phrase.text) * 1000.0 / cur_phrase.duration()
+                    if char_per_sec < max_char_per_sec:
+                        phrases.append(cur_phrase)
+                    else:
+                        print "Skipped, CPS =", char_per_sec
+                        print cur_phrase
                     cur_phrase = Phrase()
             cur_phrase.text += nexttext
             nexttext = ''
-            note = msg.note
             note_start = tms
+            notes_on.add(msg.note)
+            if harmony_index and harmony_index < len(notes_on):
+                note = list(notes_on)[harmony_index]
+            else:
+                note = msg.note
         elif msg.type in ['note_on','note_off']:
+            if note in notes_on:
+                notes_on.remove(note)
             if note == msg.note:
                 cur_phrase.notes.append((note,note_start,tms,len(cur_phrase.text)))
                 note_end = tms
@@ -157,7 +177,7 @@ def sing_phrase(notetime,p):
     ttsdur = phons[0]
     ttslist = phons[1]
     newlist = []
-    newdur = p.notes[-1][2] - p.notes[0][1]
+    newdur = p.duration() 
     print ttsdur,' ms ->',newdur
     notetime = p.notes[0][1]
     note_idx = 0
@@ -190,13 +210,14 @@ def sing_track(track, channels=None, type=None):
         s += l + '\n'
     print s
     # verify end time
-    dur = 0
-    for l in s.split('\n'):
-        toks = l.strip().split()
-        if len(toks)>=3:
-            dur += int(toks[2][:-1])
-    print "Endtime:",t,dur
-    assert t == dur
+    if output_file != '':
+        dur = 0
+        for l in s.split('\n'):
+            toks = l.strip().split()
+            if len(toks)>=3:
+                dur += int(toks[2][:-1])
+        print "Endtime:",t,dur
+        assert t == dur
     say(s)
 
 ###
@@ -207,6 +228,7 @@ for fn in sys.argv[1:]:
     mid = mido.MidiFile(fn)
     print mid
     sing_type = 'lyrics'
+    main_channel = None
     for i, track in enumerate(mid.tracks):
         sing_track_idx = -1
         sing_channel = -1
@@ -219,11 +241,13 @@ for fn in sys.argv[1:]:
                 or i == melody_track_idx
                 or track.name.strip().lower() in VOCAL_TRACK_NAMES):
                 sing_channel = msg.channel
+                if not main_channel:
+                    main_channel = sing_channel 
         if sing_channel >= 0:
-            print "Singing track %d channel %d, %s" % (sing_track_idx, sing_channel, sing_type)
-            sing_track(mid, type=sing_type, channels=[sing_channel])
+            channels = [sing_channel]
+            #if main_channel != sing_channel:
+            #    channels = [sing_channel, main_channel]
+            print "Singing track %d channels %s, %s" % (sing_track_idx, channels, sing_type)
+            sing_track(mid, type=sing_type, channels=channels)
 
-#print "*** Sing track", sing_track, "channel", sing_channel
-
-print 440.0 * math.pow(2.0, (69 - 69) / 12.0);
 
