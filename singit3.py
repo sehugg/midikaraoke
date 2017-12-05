@@ -14,9 +14,9 @@ pause_duration = 200
 #voice = 'Kathy'
 #voice = 'Princess'
 
-#voice = 'Alex'
+voice = 'Alex'
 #voice = 'Agnes'
-voice = 'Vicki'
+#voice = 'Vicki'
 #voice = 'Victoria'
 
 outcount = 0
@@ -34,7 +34,7 @@ tuning_correct = 0.10
 melody_track_idx = -2
 fixspaces = 0
 fixslashes = 0
-max_char_per_sec = 21
+max_char_per_sec = 20
 harmony_index = 0
 
 def say(text):
@@ -140,6 +140,7 @@ def split_phrases(track, channels=None, type=None):
                 nexttext += text
             #print text,cur_phrase
         if msg.type == 'note_on' and msg.velocity > 0:
+            # flush phrase?
             if not note and tms > note_end + pause_duration:
                 if len(cur_phrase.notes):
                     pos = cur_phrase.text.find(' DELAYVIBR DELAY ') # Nowhere Man
@@ -152,6 +153,11 @@ def split_phrases(track, channels=None, type=None):
                         print "Skipped, CPS =", char_per_sec
                         print cur_phrase
                     cur_phrase = Phrase()
+            # replace this note?
+            if note:
+                cur_phrase.notes.append((note,note_start,tms,len(cur_phrase.text)))
+                note_end = tms
+                note = 0
             cur_phrase.text += nexttext
             nexttext = ''
             note_start = tms
@@ -160,7 +166,7 @@ def split_phrases(track, channels=None, type=None):
                 note = list(notes_on)[harmony_index]
             else:
                 note = msg.note
-        elif msg.type in ['note_on','note_off']:
+        elif msg.type in ['note_on','note_off']: # note_on vel == 0
             if note in notes_on:
                 notes_on.remove(note)
             if note == msg.note:
