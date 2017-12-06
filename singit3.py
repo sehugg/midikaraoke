@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 from os import system
-import sys,time,math,string,subprocess,copy,codecs
+import sys,os,time,math,string,subprocess,copy,codecs,aifc
 import mido
 
 transpose = 0 - 12 #- 12
@@ -26,7 +26,7 @@ output_file = '/Users/sehugg/midi/test_%d_%d.aiff'
 LYRIC_TYPES = ['lyrics', 'text']
 VOCAL_TRACK_NAMES = ['melody', 'lead vocal', 'lead', 'vocal', 'vocals', 'vocal\'s', 'voice',
     'main  melody track', 'second melody track', 'guide melody', 'background melody',
-    'vocal 1', 'vocal 2', 'vocals 1', 'vocals 2', 'bkup vocals', 'backup singers',
+    'vocal 1', 'vocal 2', 'vocals 1', 'vocals 2', 'bkup vocals', 'backup singers', 'background vocals',
     'organ 3', 'lead organ', 'lead organ 3', 'harm 1 organ 3', 'harm 2 organ 3', 'harm 3 organ 3', 'rock organ lead',
     'bonnie tyler singing', 'melody/vibraphone', 'vocal1', 'solovox']
 pitch_correct = 0.92
@@ -61,6 +61,66 @@ lyric_substitutions = [
 ]
 lyric_substitutions = []
 
+def fix_aiff_timing(text, srcfn):
+    print "Fixing",srcfn
+    newfn = srcfn+'.tmp'
+    af = aifc.open(srcfn,'rb')
+    time2samp = af.getframerate()/1000.0
+    t = 0
+    gaps = []
+    s = ''
+    for l in text.split('\n'):
+        if l.find('{D ')>0:
+            toks = l.split()
+            dur0 = int(toks[2][:-1])
+            s += toks[0]
+            if l.find(' P ')<0:
+                t0 = int(t*time2samp)
+                t1 = int((t+dur0)*time2samp)
+                if len(gaps) and t0 == gaps[-1][1]:
+                    gaps[-1] = ((gaps[-1][0],t1,s)) # append to last gap
+                else:
+                    gaps.append((t0,t1,s)) # create new gap
+                s = ''
+            t += dur0
+    totaldur = t
+    print gaps
+    bs = 512 # block size
+    t = 0 # time
+    outdata = '' # output frames
+    for gapi in range(0,len(gaps)):
+        # copy silence
+        gapdur = gaps[gapi][1] - t
+        print t,gapdur
+        if gapdur > 0:
+            outdata += '\0\0' * gapdur
+            t += gapdur
+        # copy voice from src aiff
+        sc = 0 # silence counter
+        state = 0 # 0 = skip silence
+        while sc < 2048:
+            data = af.readframes(bs)
+            if len(data) <= 0:
+                break
+            for i in range(0,len(data),2):
+                if data[i] == '\0' and data[i+1] == '\0':
+                    if state:
+                        sc += 1 # count silence frames
+                else:
+                    outdata += data[i:i+2] # copy data
+                    state = 1
+                    sc = 0
+                    t += 1
+    print len(outdata)/2,totaldur*time2samp
+    af.close()
+    newf = aifc.open(srcfn,'wb')
+    newf.setnchannels(af.getnchannels())
+    newf.setsampwidth(af.getsampwidth())
+    newf.setframerate(af.getframerate())
+    newf.setnframes(t)
+    newf.writeframes(outdata)
+    newf.close()
+
 def say(text):
     global outcount
     text = text.replace('"','')
@@ -68,14 +128,17 @@ def say(text):
 say "%s" using "%s" modulation 0 
 END""" % (text, voice)
     if output_file != '':
+        outfn = output_file % (outcount,harmony_index)
         cmd = """osascript<<END
 say "%s" using "%s" modulation 0 saving to "%s"
-END""" % (text, voice, output_file%(outcount,harmony_index))
+END""" % (text, voice, outfn)
     response = str(system(cmd))
     outcount += 1
     print response
     if response == "good":
         print "Ok"
+    if output_file != '':
+        fix_aiff_timing(text, outfn)
 
 phoneme_cache = {}
 
