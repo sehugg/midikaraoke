@@ -2,30 +2,45 @@
 
 from os import system
 import sys,os,time,math,string,subprocess,copy,codecs,aifc,re
+import argparse
 import mido
 
-transpose = 0 - 12 #- 12
+parser = argparse.ArgumentParser()
+parser.add_argument('-o', '--output', action="store_true", help="output .aiff files")
+parser.add_argument('-v', '--voice', default="Alex", help="system voice name")
+parser.add_argument('-m', '--melody', type=int, default=-2, help="track # of melody")
+parser.add_argument('-T', '--transpose', type=int, default=-12, help="transpose by half-steps")
+parser.add_argument('-P', '--pauseduration', type=int, default=200, help="pause duration in msec")
+parser.add_argument('-H', '--harmonyindex', type=int, default=0, help="harmony index")
+parser.add_argument('-X', '--purgewords', action="store_true", help="purge lyrics before phrase")
+parser.add_argument('-c', '--cps', type=int, default=25, help="max chars per sec")
+parser.add_argument('midifile', help="MIDI file")
+parser.add_argument('midichannels', nargs='?', help="comma-separated list of MIDI channels, or -")
+args = parser.parse_args()
+
+transpose = args.transpose
 max_duration = 30000
-pause_duration = 200
+pause_duration = args.pauseduration
+voice = args.voice
 
 #voice = 'Zarvox'
 #voice = 'Fred'
 #voice = 'Bruce'
 #voice = 'Kathy'
 #voice = 'Princess'
-
-voice = 'Alex'
+#voice = 'Alex'
 #voice = 'Agnes'
 #voice = 'Vicki'
 #voice = 'Victoria'
 
 outcount = 0
 output_file = ''
-output_file = '/Users/sehugg/midi/test_%d_%d.aiff'
-harmony_index = 0
+if args.output: # TODO
+    output_file = '/Users/sehugg/midi/test_%d_%d.aiff'
+harmony_index = args.harmonyindex
 
 LYRIC_TYPES = ['lyrics', 'text']
-VOCAL_TRACK_NAMES = ['melody', 'lead vocal', 'lead', 'vocal', 'vocals', 'vocal\'s', 'voice',
+VOCAL_TRACK_NAMES = ['melody', 'lead vocal', 'lead', 'vocal', 'vocals', 'vocal\'s', 'voice', 'chorus',
     'main  melody track', 'second melody track', 'guide melody', 'background melody',
     'vocal 1', 'vocal 2', 'vocals 1', 'vocals 2', 'bkup vocals', 'backup singers', 'background vocals',
     'eric ernewein',
@@ -33,11 +48,12 @@ VOCAL_TRACK_NAMES = ['melody', 'lead vocal', 'lead', 'vocal', 'vocals', 'vocal\'
     'bonnie tyler singing', 'melody/vibraphone', 'vocal1', 'solovox']
 pitch_correct = 0.92
 tuning_correct = 0.20
-melody_track_idx = -2
+melody_track_idx = args.melody
 fixspaces = 0
 fixslashes = 0
-max_char_per_sec = 25
+max_char_per_sec = args.cps
 fix_durations = 1
+purge_words = args.purgewords
 
 lyric_substitutions = [
 ('You say ', 'Colton '),
@@ -62,6 +78,8 @@ lyric_substitutions = [
 ('shattered','birthday'),
 ]
 lyric_substitutions = []
+
+###
 
 def fix_aiff_timing(text, srcfn):
     print "Fixing",srcfn
@@ -214,6 +232,8 @@ class Phrase:
         return '"%s"%s' % (self.text, self.notes)
     def duration(self):
         return self.notes[-1][2] - self.notes[0][1]
+    def CPS(self):
+        return len(self.text) * 1000.0 / self.duration()
 
 def split_phrases(track, channels=None, type=None):
     note_start = 0
@@ -247,13 +267,15 @@ def split_phrases(track, channels=None, type=None):
                         cur_phrase.text = cur_phrase.text[pos+16:]
                     for a,b in lyric_substitutions:
                         cur_phrase.text = cur_phrase.text.replace(a,b)
-                    char_per_sec = len(cur_phrase.text) * 1000.0 / cur_phrase.duration()
+                    char_per_sec = cur_phrase.CPS()
                     if char_per_sec < max_char_per_sec:
                         phrases.append(cur_phrase)
                     else:
                         print "Skipped, CPS =", char_per_sec
                         print cur_phrase
                     cur_phrase = Phrase()
+                    if purge_words:
+                        nexttext = ''
             # replace this note?
             if note:
                 cur_phrase.notes.append((note,note_start,tms,len(cur_phrase.text)))
@@ -263,8 +285,8 @@ def split_phrases(track, channels=None, type=None):
             nexttext = ''
             note_start = tms
             notes_on.add(msg.note)
-            if harmony_index and harmony_index < len(notes_on):
-                note = list(notes_on)[harmony_index]
+            if harmony_index>0 and harmony_index <= len(notes_on):
+                note = sorted(notes_on)[harmony_index-1]
             else:
                 note = msg.note
         elif msg.type in ['note_on','note_off']: # note_on vel == 0
@@ -340,7 +362,7 @@ def is_vocal_track_name(name):
             return True
     return False
 
-for fn in sys.argv[1:]:
+def sing_midi(fn):
     print "======================================================"
     print fn
     mid = mido.MidiFile(fn)
@@ -363,9 +385,11 @@ for fn in sys.argv[1:]:
                     main_channel = sing_channel 
         if sing_channel >= 0:
             channels = [sing_channel]
-            #if main_channel != sing_channel:
-            #    channels = [sing_channel, main_channel]
+            if args.midichannels:
+                channels = [int(x) for x in string.split(args.midichannels,',')]
             print "Singing track %d channels %s, %s" % (sing_track_idx, channels, sing_type)
             sing_track(mid, type=sing_type, channels=channels)
 
+###
 
+sing_midi(args.midifile)
