@@ -22,21 +22,22 @@ voice = 'Alex'
 outcount = 0
 output_file = ''
 output_file = '/Users/sehugg/midi/test_%d_%d.aiff'
-fix_durations = 1
+harmony_index = 0
 
 LYRIC_TYPES = ['lyrics', 'text']
 VOCAL_TRACK_NAMES = ['melody', 'lead vocal', 'lead', 'vocal', 'vocals', 'vocal\'s', 'voice',
     'main  melody track', 'second melody track', 'guide melody', 'background melody',
     'vocal 1', 'vocal 2', 'vocals 1', 'vocals 2', 'bkup vocals', 'backup singers', 'background vocals',
+    'eric ernewein',
     'organ 3', 'lead organ', 'lead organ 3', 'harm 1 organ 3', 'harm 2 organ 3', 'harm 3 organ 3', 'rock organ lead',
     'bonnie tyler singing', 'melody/vibraphone', 'vocal1', 'solovox']
 pitch_correct = 0.92
-tuning_correct = 0.10
+tuning_correct = 0.20
 melody_track_idx = -2
 fixspaces = 0
 fixslashes = 0
 max_char_per_sec = 25
-harmony_index = 0
+fix_durations = 1
 
 lyric_substitutions = [
 ('You say ', 'Colton '),
@@ -332,6 +333,13 @@ def sing_track(track, channels=None, type=None):
 
 ###
 
+def is_vocal_track_name(name):
+    name = name.strip().lower()
+    for n in VOCAL_TRACK_NAMES:
+        if name.find(n) >= 0:
+            return True
+    return False
+
 for fn in sys.argv[1:]:
     print "======================================================"
     print fn
@@ -349,7 +357,7 @@ for fn in sys.argv[1:]:
                 sing_type = msg.type
             if msg.type == 'note_on' and (i == sing_track_idx 
                 or i == melody_track_idx
-                or track.name.strip().lower() in VOCAL_TRACK_NAMES):
+                or is_vocal_track_name(track.name)):
                 sing_channel = msg.channel
                 if not main_channel:
                     main_channel = sing_channel 
