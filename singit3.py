@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 from os import system
-import sys,os,time,math,string,subprocess,copy,codecs,aifc
+import sys,os,time,math,string,subprocess,copy,codecs,aifc,re
 import mido
 
 transpose = 0 - 12 #- 12
@@ -22,6 +22,7 @@ voice = 'Alex'
 outcount = 0
 output_file = ''
 output_file = '/Users/sehugg/midi/test_%d_%d.aiff'
+fix_durations = 1
 
 LYRIC_TYPES = ['lyrics', 'text']
 VOCAL_TRACK_NAMES = ['melody', 'lead vocal', 'lead', 'vocal', 'vocals', 'vocal\'s', 'voice',
@@ -68,11 +69,13 @@ def fix_aiff_timing(text, srcfn):
     time2samp = af.getframerate()/1000.0
     t = 0
     gaps = []
+    mingap = pause_duration
     s = ''
     for l in text.split('\n'):
         if l.find('{D ')>0:
             toks = l.split()
             dur0 = int(toks[2][:-1])
+            mingap = min(mingap, dur0)
             s += toks[0]
             if l.find(' P ')<0:
                 t0 = int(t*time2samp)
@@ -85,6 +88,11 @@ def fix_aiff_timing(text, srcfn):
             t += dur0
     totaldur = t
     print gaps
+    if fix_durations:
+        mingap = time2samp*500
+    else:
+        mingap = (mingap-1)*time2samp/2
+    print "Min gap",mingap,"frames"
     bs = 512 # block size
     t = 0 # time
     outdata = '' # output frames
@@ -98,7 +106,7 @@ def fix_aiff_timing(text, srcfn):
         # copy voice from src aiff
         sc = 0 # silence counter
         state = 0 # 0 = skip silence
-        while sc < 2048:
+        while sc < mingap: # TODO???
             data = af.readframes(bs)
             if len(data) <= 0:
                 break
@@ -124,20 +132,23 @@ def fix_aiff_timing(text, srcfn):
 def say(text):
     global outcount
     text = text.replace('"','')
+    saytext = text
+    if fix_durations or output_file == '':
+        saytext = re.sub(r'% {D \d+}', '% {D 1000}', saytext)
     cmd = """osascript<<END
 say "%s" using "%s" modulation 0 
-END""" % (text, voice)
+END""" % (saytext, voice)
     if output_file != '':
         outfn = output_file % (outcount,harmony_index)
         cmd = """osascript<<END
 say "%s" using "%s" modulation 0 saving to "%s"
-END""" % (text, voice, outfn)
+END""" % (saytext, voice, outfn)
     response = str(system(cmd))
     outcount += 1
     print response
     if response == "good":
         print "Ok"
-    if output_file != '':
+    if output_file != '' and fix_durations:
         fix_aiff_timing(text, outfn)
 
 phoneme_cache = {}
@@ -300,13 +311,12 @@ def sing_track(track, channels=None, type=None):
         tend = p.notes[-1][2]
         tstart = p.notes[0][1]
         dur = tstart - t
-        while dur > 0 and output_file != '':
+        while dur > 0:
             d = min(50000, dur)
             s += '%% {D %d}\n' % d
             dur -= d
         t,l = sing_phrase(t,p)
         s += l + '\n'
-    print s
     # verify end time
     if output_file != '':
         dur = 0
@@ -316,6 +326,8 @@ def sing_track(track, channels=None, type=None):
                 dur += int(toks[2][:-1])
         print "Endtime:",t,dur
         assert t == dur
+    # fix durations?
+    print s
     say(s)
 
 ###
