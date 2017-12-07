@@ -10,16 +10,19 @@ parser.add_argument('-o', '--output', action="store_true", help="output .aiff fi
 parser.add_argument('-v', '--voice', default="Alex", help="system voice name")
 parser.add_argument('-m', '--melody', type=int, default=-2, help="track # of melody")
 parser.add_argument('-T', '--transpose', type=int, default=-12, help="transpose by half-steps")
-parser.add_argument('-P', '--pauseduration', type=int, default=200, help="pause duration in msec")
+parser.add_argument('-D', '--pauseduration', type=int, default=200, help="pause duration in msec")
 parser.add_argument('-H', '--harmonyindex', type=int, default=0, help="harmony index")
 parser.add_argument('-X', '--purgewords', action="store_true", help="purge lyrics before phrase")
 parser.add_argument('-C', '--cps', type=int, default=25, help="max chars per sec")
+parser.add_argument('-P', '--pitchcorrect', type=float, default=0.92, help="pitch correction factor")
+parser.add_argument('-U', '--tuningcorrect', type=float, default=0.20, help="tuning correction factor")
 parser.add_argument('midifile', help="MIDI file")
 parser.add_argument('midichannels', nargs='?', help="comma-separated list of MIDI channels, or -")
 args = parser.parse_args()
 
 transpose = args.transpose
 max_duration = 30000
+gap_duration = 500
 pause_duration = args.pauseduration
 voice = args.voice
 
@@ -46,8 +49,8 @@ VOCAL_TRACK_NAMES = ['melody', 'lead vocal', 'lead', 'vocal', 'vocals', 'vocal\'
     'eric ernewein',
     'organ 3', 'lead organ', 'lead organ 3', 'harm 1 organ 3', 'harm 2 organ 3', 'harm 3 organ 3', 'rock organ lead',
     'bonnie tyler singing', 'melody/vibraphone', 'vocal1', 'solovox']
-pitch_correct = 0.92
-tuning_correct = 0.20
+pitch_correct = args.pitchcorrect
+tuning_correct = args.tuningcorrect
 melody_track_idx = args.melody
 fixspaces = 0
 fixslashes = 0
@@ -96,7 +99,7 @@ def fix_aiff_timing(text, srcfn):
             dur0 = int(toks[2][:-1])
             mingap = min(mingap, dur0)
             s += toks[0]
-            if l.find(' P ')<0:
+            if l.find(' P ')<0: # silence entry
                 t0 = int(t*time2samp)
                 t1 = int((t+dur0)*time2samp)
                 if len(gaps) and t0 == gaps[-1][1]:
@@ -108,7 +111,7 @@ def fix_aiff_timing(text, srcfn):
     totaldur = t
     print gaps
     if fix_durations:
-        mingap = time2samp*500
+        mingap = time2samp*gap_duration*0.8
     else:
         mingap = (mingap-1)*time2samp/2
     print "Min gap",mingap,"frames"
@@ -138,6 +141,7 @@ def fix_aiff_timing(text, srcfn):
                     state = 1
                     sc = 0
                     t += 1
+            #print t,state,sc
     print len(outdata)/2,totaldur*time2samp
     af.close()
     newf = aifc.open(srcfn,'wb')
@@ -153,7 +157,8 @@ def say(text):
     text = text.replace('"','')
     saytext = text
     if fix_durations or output_file == '':
-        saytext = re.sub(r'% {D \d+}', '% {D 1000}', saytext)
+        # insert 2 % pauses b/c sometimes they don't work :P
+        saytext = re.sub(r'% {D \d+}', '% {D '+str(gap_duration)+'}'+'\n% {D '+str(gap_duration)+'}', saytext)
     cmd = """osascript<<END
 say "%s" using "%s" modulation 0 
 END""" % (saytext, voice)
@@ -249,7 +254,23 @@ def split_phrases(track, channels=None, type=None):
         tms = int(t*1000)
         if channels and hasattr(msg,'channel') and not msg.channel in channels:
             continue
-        #print t,note,notes_on,msg,cur_phrase
+        # flush phrase?
+        if len(notes_on)==0 and tms > note_end + pause_duration:
+            if len(cur_phrase.notes):
+                pos = cur_phrase.text.find(' DELAYVIBR DELAY ') # Nowhere Man
+                if pos > 0:
+                    cur_phrase.text = cur_phrase.text[pos+16:]
+                for a,b in lyric_substitutions:
+                    cur_phrase.text = cur_phrase.text.replace(a,b)
+                char_per_sec = cur_phrase.CPS()
+                if char_per_sec < max_char_per_sec:
+                    phrases.append(cur_phrase)
+                else:
+                    print "Skipped, CPS =", char_per_sec
+                    print cur_phrase
+                cur_phrase = Phrase()
+                if purge_words:
+                    nexttext = ''
         if msg.is_meta and msg.type == type and len(msg.text):
             text = msg.text
             if len(text) and not text[0] in ['@','%']:
@@ -259,23 +280,6 @@ def split_phrases(track, channels=None, type=None):
                 nexttext += text
             #print text,cur_phrase
         if msg.type == 'note_on' and msg.velocity > 0:
-            # flush phrase?
-            if not note and tms > note_end + pause_duration:
-                if len(cur_phrase.notes):
-                    pos = cur_phrase.text.find(' DELAYVIBR DELAY ') # Nowhere Man
-                    if pos > 0:
-                        cur_phrase.text = cur_phrase.text[pos+16:]
-                    for a,b in lyric_substitutions:
-                        cur_phrase.text = cur_phrase.text.replace(a,b)
-                    char_per_sec = cur_phrase.CPS()
-                    if char_per_sec < max_char_per_sec:
-                        phrases.append(cur_phrase)
-                    else:
-                        print "Skipped, CPS =", char_per_sec
-                        print cur_phrase
-                    cur_phrase = Phrase()
-                    if purge_words:
-                        nexttext = ''
             # replace this note?
             if note:
                 cur_phrase.notes.append((note,note_start,tms,len(cur_phrase.text)))
@@ -292,10 +296,11 @@ def split_phrases(track, channels=None, type=None):
                 print note,sorted(notes_on)
             if note == msg.note:
                 cur_phrase.notes.append((note,note_start,tms,len(cur_phrase.text)))
-                note_end = tms
                 note = 0
+            note_end = tms
             if msg.note in notes_on:
                 notes_on.remove(msg.note)
+        #print t,note,notes_on,msg,nexttext,cur_phrase
     if len(cur_phrase.notes):
         phrases.append(cur_phrase)
     return phrases
@@ -369,16 +374,15 @@ def sing_midi(fn):
     print mid
     sing_type = 'lyrics'
     main_channel = None
+    sing_track_idx = -1
     for i, track in enumerate(mid.tracks):
-        sing_track_idx = -1
         sing_channel = -1
         print('Track {}: {}'.format(i, track.name))
         for msg in track:
             if msg.is_meta and msg.type in LYRIC_TYPES and len(msg.text)>2:
                 sing_track_idx = i
                 sing_type = msg.type
-            if msg.type == 'note_on' and (i == sing_track_idx 
-                or i == melody_track_idx
+            if msg.type == 'note_on' and (i == melody_track_idx
                 or is_vocal_track_name(track.name)):
                 sing_channel = msg.channel
                 if not main_channel:
@@ -387,7 +391,7 @@ def sing_midi(fn):
             channels = [sing_channel]
             if args.midichannels:
                 channels = [int(x) for x in string.split(args.midichannels,',')]
-            print "Singing track %d channels %s, %s" % (sing_track_idx, channels, sing_type)
+            print "Singing lyrics track %d channels %s, %s" % (sing_track_idx, channels, sing_type)
             sing_track(mid, type=sing_type, channels=channels)
 
 ###
