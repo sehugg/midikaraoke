@@ -8,7 +8,7 @@ import mido
 parser = argparse.ArgumentParser()
 parser.add_argument('-o', '--output', action="store_true", help="output .aiff files")
 parser.add_argument('-v', '--voice', default="Alex", help="system voice name")
-parser.add_argument('-m', '--melody', type=int, default=-2, help="track # of melody")
+parser.add_argument('-m', '--melody', type=int, default=-1, help="track # of melody")
 parser.add_argument('-T', '--transpose', type=int, default=-12, help="transpose by half-steps")
 parser.add_argument('-D', '--pauseduration', type=int, default=200, help="pause duration in msec")
 parser.add_argument('-H', '--harmonyindex', type=int, default=0, help="harmony index")
@@ -269,8 +269,6 @@ def split_phrases(track, channels=None, type=None):
                     print "Skipped, CPS =", char_per_sec
                     print cur_phrase
                 cur_phrase = Phrase()
-                if purge_words:
-                    nexttext = ''
         if msg.is_meta and msg.type == type and len(msg.text):
             text = msg.text
             if len(text) and not text[0] in ['@','%']:
@@ -280,6 +278,8 @@ def split_phrases(track, channels=None, type=None):
                 nexttext += text
             #print text,cur_phrase
         if msg.type == 'note_on' and msg.velocity > 0:
+            if purge_words and len(cur_phrase.notes)==0:
+                nexttext = ''
             # replace this note?
             if note:
                 cur_phrase.notes.append((note,note_start,tms,len(cur_phrase.text)))
@@ -291,16 +291,16 @@ def split_phrases(track, channels=None, type=None):
             notes_on.add(msg.note)
             note = msg.note
         elif msg.type in ['note_on','note_off']: # note_on vel == 0
-            if harmony_index>0 and harmony_index <= len(notes_on):
+            if harmony_index>0 and harmony_index == len(notes_on)-1:
                 note = sorted(notes_on)[harmony_index-1]
-                print note,sorted(notes_on)
+                print 'Harmony:',note,sorted(notes_on)
             if note == msg.note:
                 cur_phrase.notes.append((note,note_start,tms,len(cur_phrase.text)))
                 note = 0
             note_end = tms
             if msg.note in notes_on:
                 notes_on.remove(msg.note)
-        #print t,note,notes_on,msg,nexttext,cur_phrase
+        print t,note,notes_on,msg,nexttext,cur_phrase
     if len(cur_phrase.notes):
         phrases.append(cur_phrase)
     return phrases
@@ -373,7 +373,6 @@ def sing_midi(fn):
     mid = mido.MidiFile(fn)
     print mid
     sing_type = 'lyrics'
-    main_channel = None
     sing_track_idx = -1
     for i, track in enumerate(mid.tracks):
         sing_channel = -1
@@ -382,11 +381,12 @@ def sing_midi(fn):
             if msg.is_meta and msg.type in LYRIC_TYPES and len(msg.text)>2:
                 sing_track_idx = i
                 sing_type = msg.type
-            if msg.type == 'note_on' and (i == melody_track_idx
-                or is_vocal_track_name(track.name)):
-                sing_channel = msg.channel
-                if not main_channel:
-                    main_channel = sing_channel 
+            if msg.type == 'note_on':
+                if melody_track_idx>=0:
+                    if (i == melody_track_idx):
+                        sing_channel = msg.channel
+                elif is_vocal_track_name(track.name):
+                    sing_channel = msg.channel
         if sing_channel >= 0:
             channels = [sing_channel]
             if args.midichannels:
