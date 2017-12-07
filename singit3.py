@@ -13,7 +13,7 @@ parser.add_argument('-T', '--transpose', type=int, default=-12, help="transpose 
 parser.add_argument('-P', '--pauseduration', type=int, default=200, help="pause duration in msec")
 parser.add_argument('-H', '--harmonyindex', type=int, default=0, help="harmony index")
 parser.add_argument('-X', '--purgewords', action="store_true", help="purge lyrics before phrase")
-parser.add_argument('-c', '--cps', type=int, default=25, help="max chars per sec")
+parser.add_argument('-C', '--cps', type=int, default=25, help="max chars per sec")
 parser.add_argument('midifile', help="MIDI file")
 parser.add_argument('midichannels', nargs='?', help="comma-separated list of MIDI channels, or -")
 args = parser.parse_args()
@@ -41,7 +41,7 @@ harmony_index = args.harmonyindex
 
 LYRIC_TYPES = ['lyrics', 'text']
 VOCAL_TRACK_NAMES = ['melody', 'lead vocal', 'lead', 'vocal', 'vocals', 'vocal\'s', 'voice', 'chorus',
-    'main  melody track', 'second melody track', 'guide melody', 'background melody',
+    'main  melody track', 'second melody track', 'guide melody', 'background melody', 'volcal',
     'vocal 1', 'vocal 2', 'vocals 1', 'vocals 2', 'bkup vocals', 'backup singers', 'background vocals',
     'eric ernewein',
     'organ 3', 'lead organ', 'lead organ 3', 'harm 1 organ 3', 'harm 2 organ 3', 'harm 3 organ 3', 'rock organ lead',
@@ -285,17 +285,17 @@ def split_phrases(track, channels=None, type=None):
             nexttext = ''
             note_start = tms
             notes_on.add(msg.note)
+            note = msg.note
+        elif msg.type in ['note_on','note_off']: # note_on vel == 0
             if harmony_index>0 and harmony_index <= len(notes_on):
                 note = sorted(notes_on)[harmony_index-1]
-            else:
-                note = msg.note
-        elif msg.type in ['note_on','note_off']: # note_on vel == 0
-            if note in notes_on:
-                notes_on.remove(note)
+                print note,sorted(notes_on)
             if note == msg.note:
                 cur_phrase.notes.append((note,note_start,tms,len(cur_phrase.text)))
                 note_end = tms
                 note = 0
+            if msg.note in notes_on:
+                notes_on.remove(msg.note)
     if len(cur_phrase.notes):
         phrases.append(cur_phrase)
     return phrases
