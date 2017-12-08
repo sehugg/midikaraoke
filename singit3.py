@@ -14,7 +14,7 @@ parser.add_argument('-D', '--pauseduration', type=int, default=200, help="pause 
 parser.add_argument('-H', '--harmonyindex', type=int, default=0, help="harmony index")
 parser.add_argument('-X', '--purgewords', action="store_true", help="purge lyrics before phrase")
 parser.add_argument('-C', '--cps', type=int, default=25, help="max chars per sec")
-parser.add_argument('-P', '--pitchcorrect', type=float, default=0.92, help="pitch correction factor")
+parser.add_argument('-P', '--pitchcorrect', type=float, default=0.95, help="pitch correction factor")
 parser.add_argument('-U', '--tuningcorrect', type=float, default=0.20, help="tuning correction factor")
 parser.add_argument('midifile', help="MIDI file")
 parser.add_argument('midichannels', nargs='?', help="comma-separated list of MIDI channels, or -")
@@ -22,7 +22,7 @@ args = parser.parse_args()
 
 transpose = args.transpose
 max_duration = 30000
-gap_duration = 500
+gap_duration = 1000
 pause_duration = args.pauseduration
 voice = args.voice
 
@@ -45,8 +45,7 @@ harmony_index = args.harmonyindex
 LYRIC_TYPES = ['lyrics', 'text']
 VOCAL_TRACK_NAMES = ['melody', 'lead vocal', 'lead', 'vocal', 'vocals', 'vocal\'s', 'voice', 'chorus',
     'main  melody track', 'second melody track', 'guide melody', 'background melody', 'volcal',
-    'vocal 1', 'vocal 2', 'vocals 1', 'vocals 2', 'bkup vocals', 'backup singers', 'background vocals',
-    'eric ernewein',
+    'vocal 1', 'vocal 2', 'vocals 1', 'vocals 2', 'bkup vocals', 'backup singers', 'background vocals', 'harmony',
     'organ 3', 'lead organ', 'lead organ 3', 'harm 1 organ 3', 'harm 2 organ 3', 'harm 3 organ 3', 'rock organ lead',
     'bonnie tyler singing', 'melody/vibraphone', 'vocal1', 'solovox']
 pitch_correct = args.pitchcorrect
@@ -291,7 +290,7 @@ def split_phrases(track, channels=None, type=None):
             notes_on.add(msg.note)
             note = msg.note
         elif msg.type in ['note_on','note_off']: # note_on vel == 0
-            if harmony_index>0 and harmony_index == len(notes_on)-1:
+            if harmony_index > 0 and harmony_index <= len(notes_on):
                 note = sorted(notes_on)[harmony_index-1]
                 print 'Harmony:',note,sorted(notes_on)
             if note == msg.note:
@@ -300,7 +299,7 @@ def split_phrases(track, channels=None, type=None):
             note_end = tms
             if msg.note in notes_on:
                 notes_on.remove(msg.note)
-        print t,note,notes_on,msg,nexttext,cur_phrase
+        #print t,note,notes_on,msg,nexttext,cur_phrase
     if len(cur_phrase.notes):
         phrases.append(cur_phrase)
     return phrases
