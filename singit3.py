@@ -254,6 +254,7 @@ def split_phrases(track, channels=None, type=None):
     cur_phrase = Phrase()
     phrases = []
     nexttext = ''
+    lasttexttime = 0
     for msg in track:
         t += msg.time
         tms = int(t*1000)
@@ -261,6 +262,8 @@ def split_phrases(track, channels=None, type=None):
             continue
         # flush phrase?
         if len(notes_on)==0 and tms > note_end + pause_duration:
+            if purge_words and len(cur_phrase.notes)==0 and lasttexttime < tms:
+                nexttext = ''
             if len(cur_phrase.notes):
                 for a,b in lyric_substitutions:
                     cur_phrase.text = cur_phrase.text.replace(a,b)
@@ -271,7 +274,8 @@ def split_phrases(track, channels=None, type=None):
                     print "Skipped, CPS =", char_per_sec
                     print cur_phrase
                 cur_phrase = Phrase()
-        if msg.is_meta and msg.type == type and len(msg.text) and t>0:
+        if msg.is_meta and msg.type == type and len(msg.text) and tms>0:
+            lasttexttime = tms
             text = msg.text
             if len(text) and not text[0] in ['@','%']:
                 text = text.replace('/',' ').replace('\\',' ')
@@ -280,8 +284,6 @@ def split_phrases(track, channels=None, type=None):
                 nexttext += text
             #print text,cur_phrase
         if msg.type == 'note_on' and msg.velocity > 0:
-            if purge_words and len(cur_phrase.notes)==0:
-                nexttext = ''
             # replace this note?
             if note:
                 cur_phrase.notes.append((note,note_start,tms,len(cur_phrase.text)))
@@ -302,6 +304,8 @@ def split_phrases(track, channels=None, type=None):
             note_end = tms
             if msg.note in notes_on:
                 notes_on.remove(msg.note)
+                cur_phrase.text += nexttext
+                nexttext = ''
         #print t,note,notes_on,msg,nexttext,cur_phrase
     if len(cur_phrase.notes):
         phrases.append(cur_phrase)
