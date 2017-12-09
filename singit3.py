@@ -55,6 +55,7 @@ fixspaces = 0
 fixslashes = 0
 max_char_per_sec = args.cps
 fix_durations = 1
+vowel_duration_only = 1 # TODO
 purge_words = args.purgewords
 
 lyric_substitutions = [
@@ -184,14 +185,19 @@ def get_phoneme_list(text):
     response = subprocess.check_output(cmd)
     lines = response.split('\n')
     result = []
-    totaldur = 0
+    voweldur = 0
+    consdur = 0
     for l in lines:
         if len(l):
             result.append(l)
             if l.find(' P ')>=0:
-                dur = int(l.split()[2][:-1])
-                totaldur += dur
-    r = (totaldur,result)
+                toks = l.split()
+                dur = int(toks[2][:-1])
+                if is_vowel(toks[0]):
+                    voweldur += dur
+                else:
+                    consdur += dur
+    r = (voweldur,consdur,result)
     phoneme_cache[text] = copy.deepcopy(r)
     return r
 
@@ -209,10 +215,10 @@ def fix_phoneme(l, olddur, newdur, freq):
     dur0 = int(toks[2][:-1])
     dur1 = int(round(dur0*newdur/olddur))
     dur1 = min(max_duration, dur1)
+    vowel = is_vowel(toks[0])
+    if vowel_duration_only and not vowel:
+        dur1 = dur0
     toks[2] = str(dur1) + toks[2][-1]
-    #vowel = is_vowel(toks[0])
-    #if vowel:
-    #    dur1 = dur0
     for i in range(3,len(toks)):
         if toks[i].find(':')>0:
             f1,p1 = toks[i].split(':')
@@ -256,9 +262,6 @@ def split_phrases(track, channels=None, type=None):
         # flush phrase?
         if len(notes_on)==0 and tms > note_end + pause_duration:
             if len(cur_phrase.notes):
-                pos = cur_phrase.text.find(' DELAYVIBR DELAY ') # Nowhere Man
-                if pos > 0:
-                    cur_phrase.text = cur_phrase.text[pos+16:]
                 for a,b in lyric_substitutions:
                     cur_phrase.text = cur_phrase.text.replace(a,b)
                 char_per_sec = cur_phrase.CPS()
@@ -268,7 +271,7 @@ def split_phrases(track, channels=None, type=None):
                     print "Skipped, CPS =", char_per_sec
                     print cur_phrase
                 cur_phrase = Phrase()
-        if msg.is_meta and msg.type == type and len(msg.text):
+        if msg.is_meta and msg.type == type and len(msg.text) and t>0:
             text = msg.text
             if len(text) and not text[0] in ['@','%']:
                 text = text.replace('/',' ').replace('\\',' ')
@@ -306,16 +309,19 @@ def split_phrases(track, channels=None, type=None):
 
 def sing_phrase(notetime,p):
     print unicode(p).encode('utf-8')
-    phons = get_phoneme_list(p.text)
-    ttsdur = phons[0]
-    ttslist = phons[1]
+    voweldur,consdur,ttslist = get_phoneme_list(p.text)
+    if vowel_duration_only:
+        newdur = p.duration() - consdur
+        ttsdur = max(voweldur//2, voweldur)
+    else:
+        newdur = p.duration()
+        ttsdur = consdur + voweldur
     newlist = []
-    newdur = p.duration() 
     print ttsdur,' ms ->',newdur
     notetime = p.notes[0][1]
     note_idx = 0
     for i in range(0,len(ttslist)):
-        ph = phons[1][i]
+        ph = ttslist[i]
         print ph
         if ph[0] == '_' or ph[0] == '~':
             word = ph.split('"')[1]
