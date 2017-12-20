@@ -39,7 +39,7 @@ voice = args.voice
 outcount = 0
 output_file = ''
 if args.output: # TODO
-    output_file = '/Users/sehugg/midi/test_%d_%d.aiff'
+    output_file = os.getcwd() + '/test_%d_%d.aiff'
 harmony_index = args.harmonyindex
 
 LYRIC_TYPES = ['lyrics', 'text']

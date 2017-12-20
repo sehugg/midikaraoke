@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 from os import system
-import sys,time,math,string,subprocess,copy
+import os,sys,time,math,string,subprocess,copy
 import mido
 
 transpose = -12
@@ -20,7 +20,7 @@ voice = 'Alex'
 
 outcount = 0
 output_file = ''
-output_file = '/Users/sehugg/midi/test%d.aiff'
+#output_file = os.getcwd() + '/test_%d_%d.aiff'
 
 LYRIC_TYPES = ['lyrics', 'text']
 VOCAL_TRACK_NAMES = ['melody', 'lead vocal', 'lead', 'vocal', 'vocals', 'main  melody track',
