@@ -38,7 +38,7 @@ voice = args.voice
 
 outcount = 0
 output_file = ''
-if args.output: # TODO
+if args.output:
     output_file = os.getcwd() + '/test_%d_%d.aiff'
 harmony_index = args.harmonyindex
 

@@ -1,22 +1,26 @@
 #!/usr/bin/python
 
 from os import system
-import sys,time
+import sys,time,math,argparse
 import mido
 
-transpose = -12
-master_rate = 28.0
-#voice = 'Zarvox'
-#voice = 'Fred'
-#voice = 'Bruce'
-voice = 'Alex'
-#voice = 'Tom'
-#voice = 'Allison'
-#voice = 'Ava'
+parser = argparse.ArgumentParser()
+parser.add_argument('-o', '--output', action="store_true", help="output .aiff files")
+parser.add_argument('-v', '--voice', default="Alex", help="system voice name")
+#parser.add_argument('-m', '--melody', type=int, default=-1, help="track # of melody")
+parser.add_argument('-T', '--transpose', type=int, default=-12, help="transpose by half-steps")
+parser.add_argument('-R', '--wordrate', type=float, default=64.0, help="speaking rate (words per second)")
+parser.add_argument('midifile', help="MIDI file")
+args = parser.parse_args()
+
+transpose = args.transpose
+master_rate = args.wordrate
+voice = args.voice
 
 outcount = 0
 output_file = ''
-#output_file = '/Users/sehugg/midi/test%d.aiff'
+if args.output:
+    output_file = os.getcwd() + '/test_%d_%d.aiff'
 
 def say(text):
     global outcount
@@ -54,7 +58,8 @@ def sing_track(track):
                 phrase += msg.text
         if msg.type == 'note_on' and msg.velocity == 0 and t > note_t0:
                 rate = int(master_rate / (t-note_t0))
-                s += '[[pbas %d; pmod 0; rate %d]]%s' % (note, rate, phrase)
+                freq = 440.0 * math.pow(2.0, (note - 69) / 12.0);
+                s += '[[pbas %f; pmod 0; rate %d]]%s' % (freq, rate, phrase)
                 phrase = ''
                 note_t0 = t
                 #say(msg.text, note)
@@ -63,7 +68,7 @@ def sing_track(track):
 
 ###
 
-for fn in sys.argv[1:]:
+for fn in [args.midifile]:
     print "======================================================"
     print fn
     try:

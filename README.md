@@ -4,12 +4,25 @@ MIDI Karaoke for OS X
 Many MIDI files have built-in lyrics.
 You can make them sing using OS X speech services!
 
-Installation:
+Installation
+------------
 
 Type "make" to build the phoneme helper (you need Xcode Command-Line Tools
 installed)
 
-Usage:
+Go to System Preferences and install some voices. Recommended:
+
+* Alex
+* Vicki
+* Agnes
+* Fred
+
+Other voices may not work, or only work with singit.py which is an
+older version of the program which doesn't use the [[inpt TUNE]]
+syntax.
+
+Usage
+-----
 
     ./singit3.py <midi file> <flags>
 
