@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 from os import system
-import sys,time,math,argparse
+import os,sys,time,math,argparse
 import mido
 
 parser = argparse.ArgumentParser()
@@ -9,7 +9,7 @@ parser.add_argument('-o', '--output', action="store_true", help="output .aiff fi
 parser.add_argument('-v', '--voice', default="Alex", help="system voice name")
 #parser.add_argument('-m', '--melody', type=int, default=-1, help="track # of melody")
 parser.add_argument('-T', '--transpose', type=int, default=-12, help="transpose by half-steps")
-parser.add_argument('-R', '--wordrate', type=float, default=64.0, help="speaking rate (words per second)")
+parser.add_argument('-R', '--wordrate', type=float, default=100.0, help="speaking rate (words per second)")
 parser.add_argument('midifile', help="MIDI file")
 args = parser.parse_args()
 
@@ -20,7 +20,7 @@ voice = args.voice
 outcount = 0
 output_file = ''
 if args.output:
-    output_file = os.getcwd() + '/test_%d_%d.aiff'
+    output_file = os.getcwd() + '/test_%d.aiff'
 
 def say(text):
     global outcount

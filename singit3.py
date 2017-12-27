@@ -8,6 +8,7 @@ import mido
 parser = argparse.ArgumentParser()
 parser.add_argument('-o', '--output', action="store_true", help="output .aiff files")
 parser.add_argument('-v', '--voice', default="Alex", help="system voice name")
+parser.add_argument('-q', '--quiet', action="store_true", help="quiet (no stdout debugging)")
 parser.add_argument('-m', '--melody', type=int, default=-1, help="track # of melody")
 parser.add_argument('-T', '--transpose', type=int, default=-12, help="transpose by half-steps")
 parser.add_argument('-D', '--pauseduration', type=int, default=200, help="pause duration in msec")
@@ -16,6 +17,8 @@ parser.add_argument('-X', '--purgewords', action="store_true", help="purge lyric
 parser.add_argument('-C', '--cps', type=int, default=25, help="max chars per sec")
 parser.add_argument('-P', '--pitchcorrect', type=float, default=0.95, help="pitch correction factor")
 parser.add_argument('-U', '--tuningcorrect', type=float, default=0.20, help="tuning correction factor")
+parser.add_argument('-O', '--outlyrics', help="print lyric phrases to file")
+parser.add_argument('-I', '--inlyrics', help="input lyric phrases from file")
 parser.add_argument('midifile', help="MIDI file")
 parser.add_argument('midichannels', nargs='?', help="comma-separated list of MIDI channels, or -")
 args = parser.parse_args()
@@ -25,6 +28,9 @@ max_duration = 30000
 gap_duration = 1000
 pause_duration = args.pauseduration
 voice = args.voice
+outlyrics = args.outlyrics
+inlyrics = args.inlyrics
+verbose = not (args.quiet or outlyrics!='')
 
 #voice = 'Zarvox'
 #voice = 'Fred'
@@ -58,34 +64,20 @@ fix_durations = 1
 vowel_duration_only = 1 # TODO
 purge_words = args.purgewords
 
-lyric_substitutions = [
-('You say ', 'Colton '),
-('It\'s my birthday too', 'You\'re nine years old'),
-('I would like you to ', 'Kitty and Daisy will '),
-('Peach', 'Birthday'),
-('peach', 'birthday'),
-('holiday', 'birthday'),
-('Holiday', 'Birthday'),
-('nowhere', 'birthday'),
-('Nowhere', 'Birthday'),
-('of the tiger', 'of Colton\'s birthday'),
-('Ziggy', 'Colton'),
-('Weird', 'Becca'),
-('Gilly', 'Kay-lyn'),
-('hung', 'groomed'),
-('balls', 'butts'),
-('bitched', 'kvetched'),
-('SOS', 'birthday wish'),
-('Message in a bottle','Happy Birthday Cohlton'),
-('Shattered','Birthday'),
-('shattered','birthday'),
-]
-lyric_substitutions = []
-
 ###
 
+def prinfo(fmt, args=[]):
+    sys.stderr.write((fmt+"\n") % args)
+
+def prdebug(fmt, args=None):
+    if verbose:
+        if args:
+            print (fmt % args)
+        else:
+            print (fmt)
+
 def fix_aiff_timing(text, srcfn):
-    print "Fixing",srcfn
+    prdebug("Fixing %s", srcfn)
     newfn = srcfn+'.tmp'
     af = aifc.open(srcfn,'rb')
     time2samp = af.getframerate()/1000.0
@@ -109,19 +101,19 @@ def fix_aiff_timing(text, srcfn):
                 s = ''
             t += dur0
     totaldur = t
-    print gaps
+    prdebug("%s", gaps)
     if fix_durations:
         mingap = time2samp*gap_duration*0.8
     else:
         mingap = (mingap-1)*time2samp/2
-    print "Min gap",mingap,"frames"
+    prdebug("Min gap %d frames", mingap)
     bs = 512 # block size
     t = 0 # time
     outdata = '' # output frames
     for gapi in range(0,len(gaps)):
         # copy silence
         gapdur = gaps[gapi][1] - t
-        print t,gapdur
+        prdebug("%d\t%d", (t,gapdur))
         if gapdur > 0:
             outdata += '\0\0' * gapdur
             t += gapdur
@@ -142,7 +134,7 @@ def fix_aiff_timing(text, srcfn):
                     sc = 0
                     t += 1
             #print t,state,sc
-    print len(outdata)/2,totaldur*time2samp
+    prdebug("%d %d", (len(outdata)/2,totaldur*time2samp))
     af.close()
     newf = aifc.open(srcfn,'wb')
     newf.setnchannels(af.getnchannels())
@@ -169,9 +161,8 @@ say "%s" using "%s" modulation 0 saving to "%s"
 END""" % (saytext, voice, outfn)
     response = str(system(cmd))
     outcount += 1
-    print response
-    if response == "good":
-        print "Ok"
+    if response != "good":
+        prdebug("say() response '%s'", response)
     if output_file != '' and fix_durations:
         fix_aiff_timing(text, outfn)
 
@@ -244,6 +235,8 @@ class Phrase:
         return self.notes[-1][2] - self.notes[0][1]
     def CPS(self):
         return len(self.text) * 1000.0 / self.duration()
+    def empty(self):
+        return len(self.text)==0 or len(self.notes)==0
 
 def split_phrases(track, channels=None, type=None):
     note_start = 0
@@ -264,15 +257,12 @@ def split_phrases(track, channels=None, type=None):
         if len(notes_on)==0 and tms > note_end + pause_duration:
             if purge_words and len(cur_phrase.notes)==0 and lasttexttime < tms:
                 nexttext = ''
-            if len(cur_phrase.notes):
-                for a,b in lyric_substitutions:
-                    cur_phrase.text = cur_phrase.text.replace(a,b)
+            if not cur_phrase.empty():
                 char_per_sec = cur_phrase.CPS()
                 if char_per_sec < max_char_per_sec:
                     phrases.append(cur_phrase)
                 else:
-                    print "Skipped, CPS =", char_per_sec
-                    print cur_phrase
+                    prdebug("Skipped, CPS = %d - %s", (char_per_sec, cur_phrase))
                 cur_phrase = Phrase()
         if msg.is_meta and msg.type == type and len(msg.text) and tms>0:
             lasttexttime = tms
@@ -297,7 +287,7 @@ def split_phrases(track, channels=None, type=None):
         elif msg.type in ['note_on','note_off']: # note_on vel == 0
             if harmony_index > 0 and harmony_index <= len(notes_on):
                 note = sorted(notes_on)[harmony_index-1]
-                print 'Harmony:',note,sorted(notes_on)
+                prdebug('Harmony: %d, %s', (note,sorted(notes_on)))
             if note == msg.note:
                 cur_phrase.notes.append((note,note_start,tms,len(cur_phrase.text)))
                 note = 0
@@ -307,12 +297,12 @@ def split_phrases(track, channels=None, type=None):
                 cur_phrase.text += nexttext
                 nexttext = ''
         #print t,note,notes_on,msg,nexttext,cur_phrase
-    if len(cur_phrase.notes):
+    if not cur_phrase.empty():
         phrases.append(cur_phrase)
     return phrases
 
 def sing_phrase(notetime,p):
-    print unicode(p).encode('utf-8')
+    prdebug("%s", unicode(p).encode('utf-8'))
     voweldur,consdur,ttslist = get_phoneme_list(p.text)
     if vowel_duration_only:
         newdur = p.duration() - consdur
@@ -321,12 +311,12 @@ def sing_phrase(notetime,p):
         newdur = p.duration()
         ttsdur = consdur + voweldur
     newlist = []
-    print ttsdur,' ms ->',newdur
+    prdebug("%d ms -> %d" % (ttsdur,newdur))
     notetime = p.notes[0][1]
     note_idx = 0
     for i in range(0,len(ttslist)):
         ph = ttslist[i]
-        print ph
+        prdebug("%s", ph)
         if ph[0] == '_' or ph[0] == '~':
             word = ph.split('"')[1]
         elif ph.find(' P ') >= 0:
@@ -344,6 +334,17 @@ def sing_track(track, channels=None, type=None):
     phrases = split_phrases(track, channels, type)
     s = '[[inpt TUNE]]\n'
     t = 0
+    if inlyrics:
+        prinfo("Reading external lyrics file %s", inlyrics)
+        with open(inlyrics,'r') as inf:
+            for p in phrases:
+                p.text = inf.readline()
+    if outlyrics:
+        prinfo("Writing external lyrics file %s", outlyrics)
+        with open(outlyrics,'w') as outf:
+            for p in phrases:
+                outf.write("%s\n" % p.text)
+        sys.exit(0)
     for p in phrases:
         tend = p.notes[-1][2]
         tstart = p.notes[0][1]
@@ -361,10 +362,10 @@ def sing_track(track, channels=None, type=None):
             toks = l.strip().split()
             if len(toks)>=3:
                 dur += int(toks[2][:-1])
-        print "Endtime:",t,dur
+        prdebug("Endtime: %d %d", (t,dur))
         assert t == dur
     # fix durations?
-    print s
+    prdebug("%s", s)
     say(s)
 
 ###
@@ -377,15 +378,15 @@ def is_vocal_track_name(name):
     return False
 
 def sing_midi(fn):
-    print "======================================================"
-    print fn
+    prinfo("======================================================")
+    prinfo("%s", fn)
     mid = mido.MidiFile(fn)
-    print mid
+    prinfo("%s", mid)
     sing_type = 'lyrics'
     sing_track_idx = -1
     for i, track in enumerate(mid.tracks):
         sing_channel = -1
-        print('Track {}: {}'.format(i, track.name))
+        prinfo('Track %d: %s', (i, track.name))
         for msg in track:
             if msg.is_meta and msg.type in LYRIC_TYPES and len(msg.text)>2:
                 sing_track_idx = i
@@ -400,7 +401,7 @@ def sing_midi(fn):
             channels = [sing_channel]
             if args.midichannels:
                 channels = [int(x) for x in string.split(args.midichannels,',')]
-            print "Singing lyrics track %d channels %s, %s" % (sing_track_idx, channels, sing_type)
+            prinfo("Singing lyrics track %d channels %s, %s", (sing_track_idx, channels, sing_type))
             sing_track(mid, type=sing_type, channels=channels)
 
 ###
