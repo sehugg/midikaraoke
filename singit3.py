@@ -30,7 +30,7 @@ pause_duration = args.pauseduration
 voice = args.voice
 outlyrics = args.outlyrics
 inlyrics = args.inlyrics
-verbose = not (args.quiet or outlyrics!='')
+verbose = not (args.quiet or outlyrics)
 
 #voice = 'Zarvox'
 #voice = 'Fred'
@@ -77,7 +77,7 @@ def prdebug(fmt, args=None):
             print (fmt)
 
 def fix_aiff_timing(text, srcfn):
-    prdebug("Fixing %s", srcfn)
+    prinfo("Fixing %s", srcfn)
     newfn = srcfn+'.tmp'
     af = aifc.open(srcfn,'rb')
     time2samp = af.getframerate()/1000.0
