@@ -40,11 +40,12 @@ END""" % (text, voice)
         cmd = """osascript<<END
 say "%s" using "%s" modulation 0 saving to "%s"
 END""" % (text, voice, output_file%outcount)
+    print(cmd)
     response = str(system(cmd))
     outcount += 1
-    print response
+    print(response)
     if response == "good":
-        print "Ok"
+        print("Ok")
 
 phoneme_cache = {}
 
@@ -53,7 +54,7 @@ def get_phoneme_list(text):
     if r:
         return copy.deepcopy(r)
     cmd = ['./phonemes','-v',voice,'-t',text]
-    response = subprocess.check_output(cmd)
+    response = subprocess.check_output(cmd).decode('utf-8')
     lines = response.split('\n')
     result = []
     totaldur = 0
@@ -90,7 +91,7 @@ def fix_phonemes(phonlist, newdur, freq):
                 #f2 = freq + (f1-avgf)/4
                 toks[i] = str(f2) + ':' + p1
         if dur1>=5:
-            newlist.append(string.join(toks,' '))
+            newlist.append(' '.join(toks))
     phonlist[1][:] = newlist
 
 #with stopping current speech without waiting until completion
@@ -127,7 +128,7 @@ def sing_track(track, channels=None, msgs=None, type=None):
             duration = max(min_duration, tms-note_t0)
             freq = 440.0 * math.pow(2.0, (note - 69) / 12.0);
             phonlist = get_phoneme_list(phrase)
-            print phrase,'\t',note,duration,len(phonlist),round(tuning_error)
+            print(phrase,'\t',note,duration,len(phonlist),round(tuning_error))
             fix_phonemes(phonlist, duration, freq)
             for l in phonlist[1]:
                 s += l + '\n'
@@ -135,39 +136,35 @@ def sing_track(track, channels=None, msgs=None, type=None):
             note_t0 += duration
             totaldur += duration
             note = 0
-    print s
-    print note_t0,totaldur
+    print(s)
+    print(note_t0,totaldur)
     say(s)
 
 ###
 
 for fn in sys.argv[1:]:
-    print "======================================================"
-    print fn
-    try:
-        mid = mido.MidiFile(fn)
-        print mid
-        sing_type = 'lyrics'
-        for i, track in enumerate(mid.tracks):
-            sing_track_idx = -1
-            sing_channel = -1
-            print('Track {}: {}'.format(i, track.name))
-            track_msgs = []
-            for msg in track:
-                track_msgs.append(msg)
-                if msg.is_meta and msg.type in LYRIC_TYPES and len(msg.text)>2:
-                    sing_track_idx = i
-                    sing_type = msg.type
-                if msg.type == 'note_on' and (i == sing_track_idx 
-                    or i == melody_track_idx
-                    or track.name.strip().lower() in VOCAL_TRACK_NAMES):
-                    sing_channel = msg.channel
-            if sing_channel >= 0:
-                print "Singing track %d channel %d, %s" % (sing_track_idx, sing_channel, sing_type)
-                sing_track(mid, type=sing_type, channels=[sing_channel])
-    except:
-        print sys.exc_info()
-        
+    print("======================================================")
+    print(fn)
+    mid = mido.MidiFile(fn)
+    print(mid)
+    sing_type = 'lyrics'
+    for i, track in enumerate(mid.tracks):
+        sing_track_idx = -1
+        sing_channel = -1
+        print(('Track {}: {}'.format(i, track.name)))
+        track_msgs = []
+        for msg in track:
+            track_msgs.append(msg)
+            if msg.is_meta and msg.type in LYRIC_TYPES and len(msg.text)>2:
+                sing_track_idx = i
+                sing_type = msg.type
+            if msg.type == 'note_on' and (i == sing_track_idx 
+                or i == melody_track_idx
+                or track.name.strip().lower() in VOCAL_TRACK_NAMES):
+                sing_channel = msg.channel
+        if sing_channel >= 0:
+            print("Singing track %d channel %d, %s" % (sing_track_idx, sing_channel, sing_type))
+            sing_track(mid, type=sing_type, channels=[sing_channel])
 
 #print "*** Sing track", sing_track, "channel", sing_channel
 

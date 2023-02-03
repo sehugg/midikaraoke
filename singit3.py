@@ -31,6 +31,7 @@ voice = args.voice
 outlyrics = args.outlyrics
 inlyrics = args.inlyrics
 verbose = not (args.quiet or outlyrics)
+verbose = 1
 
 #voice = 'Zarvox'
 #voice = 'Fred'
@@ -60,7 +61,7 @@ melody_track_idx = args.melody
 fixspaces = 0
 fixslashes = 0
 max_char_per_sec = args.cps
-fix_durations = 1
+fix_durations = 0
 vowel_duration_only = 1 # TODO
 purge_words = args.purgewords
 
@@ -88,7 +89,7 @@ def fix_aiff_timing(text, srcfn):
     for l in text.split('\n'):
         if l.find('{D ')>0:
             toks = l.split()
-            dur0 = int(toks[2][:-1])
+            dur0 = int(float(toks[2][:-1]))
             mingap = min(mingap, dur0)
             s += toks[0]
             if l.find(' P ')<0: # silence entry
@@ -154,11 +155,13 @@ def say(text):
     cmd = """osascript<<END
 say "%s" using "%s" modulation 0 
 END""" % (saytext, voice)
+    cmd = """osascript 'say "%s" using "%s" modulation 0'""" % (saytext, voice)
     if output_file != '':
         outfn = output_file % (outcount,harmony_index)
         cmd = """osascript<<END
 say "%s" using "%s" modulation 0 saving to "%s"
 END""" % (saytext, voice, outfn)
+    print(cmd)
     response = str(system(cmd))
     outcount += 1
     if response != "good":
@@ -174,6 +177,7 @@ def get_phoneme_list(text):
         return copy.deepcopy(r)
     cmd = ['./phonemes','-v',voice,'-t',text]
     response = subprocess.check_output(cmd)
+    response = str(response)
     lines = response.split('\n')
     result = []
     voweldur = 0
@@ -183,7 +187,7 @@ def get_phoneme_list(text):
             result.append(l)
             if l.find(' P ')>=0:
                 toks = l.split()
-                dur = int(toks[2][:-1])
+                dur = int(float(toks[2][:-1]))
                 if is_vowel(toks[0]):
                     voweldur += dur
                 else:
@@ -203,7 +207,7 @@ def is_vowel(s):
 def fix_phoneme(l, olddur, newdur, freq):
     global tuning_error
     toks = l.split()
-    dur0 = int(toks[2][:-1])
+    dur0 = int(float(toks[2][:-1]))
     dur1 = int(round(dur0*newdur/olddur))
     dur1 = min(max_duration, dur1)
     vowel = is_vowel(toks[0])
@@ -221,7 +225,7 @@ def fix_phoneme(l, olddur, newdur, freq):
             #f2 = freq + (f1-avgf)/4
             toks[i] = str(f2) + ':' + p1
     if dur1>=5:
-        return (dur0, dur1, string.join(toks,' '))
+        return (dur0, dur1, ' '.join(toks))
     else:
         return (dur0, 0, None)
 
@@ -249,6 +253,7 @@ def split_phrases(track, channels=None, type=None):
     nexttext = ''
     lasttexttime = 0
     for msg in track:
+        #print(msg)
         t += msg.time
         tms = int(t*1000)
         if channels and hasattr(msg,'channel') and not msg.channel in channels:
@@ -272,7 +277,7 @@ def split_phrases(track, channels=None, type=None):
                 if fixspaces and text[-1] != '-':
                     text += ' '
                 nexttext += text
-            #print text,cur_phrase
+            #print(text,cur_phrase)
         if msg.type == 'note_on' and msg.velocity > 0:
             # replace this note?
             if note:
@@ -302,7 +307,7 @@ def split_phrases(track, channels=None, type=None):
     return phrases
 
 def sing_phrase(notetime,p):
-    prdebug("%s", unicode(p).encode('utf-8'))
+    prdebug("%s", str(p).encode('utf-8'))
     voweldur,consdur,ttslist = get_phoneme_list(p.text)
     if vowel_duration_only:
         newdur = p.duration() - consdur
@@ -328,7 +333,7 @@ def sing_phrase(notetime,p):
             if newph:
                 newlist.append(newph)
             notetime += dur1
-    return notetime, string.join(newlist, '\n')
+    return notetime, '\n'.join(newlist)
 
 def sing_track(track, channels=None, type=None):
     phrases = split_phrases(track, channels, type)
@@ -381,7 +386,6 @@ def sing_midi(fn):
     prinfo("======================================================")
     prinfo("%s", fn)
     mid = mido.MidiFile(fn)
-    prinfo("%s", mid)
     sing_type = 'lyrics'
     sing_track_idx = -1
     for i, track in enumerate(mid.tracks):
@@ -400,7 +404,7 @@ def sing_midi(fn):
         if sing_channel >= 0:
             channels = [sing_channel]
             if args.midichannels:
-                channels = [int(x) for x in string.split(args.midichannels,',')]
+                channels = [int(x) for x in args.midichannels.split(',')]
             prinfo("Singing lyrics track %d channels %s, %s", (sing_track_idx, channels, sing_type))
             sing_track(mid, type=sing_type, channels=channels)
 
