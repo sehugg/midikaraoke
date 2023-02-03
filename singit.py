@@ -60,8 +60,6 @@ def sing_track(track, channels=None, msgs=None, type=None):
         if msgs and not msg in msgs:
             continue
         #print(t,msg)
-        if msg.is_meta and msg.type == type:
-                phrase += msg.text
         if msg.type == 'note_on' and msg.velocity > 0:
                 #if output_file!='' and (t-note_t0) > 0:
                 #    s += '[[slnc %d]]' % (1000*(t-note_t0))
@@ -75,12 +73,14 @@ def sing_track(track, channels=None, msgs=None, type=None):
                 phrase = ''
                 note_t0 = t
                 #say(msg.text, note)
+        if msg.is_meta and msg.type == type:
+                phrase += msg.text
     print(s)
     say(s)
 
 ###
 
-for fn in sys.argv[1:]:
+for fn in [args.midifile]:
     print("======================================================")
     print(fn)
     mid = mido.MidiFile(fn)
