@@ -3,6 +3,7 @@
 from os import system
 import os,sys,time,math,argparse
 import mido
+import osascript
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-o', '--output', action="store_true", help="output .aiff files")
@@ -29,6 +30,17 @@ if args.output:
     output_file = os.getcwd() + '/test_%d.aiff'
 
 def say(text):
+    global outcount
+    text = text.replace('"','')
+    cmd = """say "%s" using "%s" modulation 0""" % (text, voice)
+    if output_file != '':
+        cmd = """say "%s" using "%s" modulation 0 saving to "%s" """ % (text, voice, output_file%outcount)
+    code,response,err = osascript.run(cmd)
+    if err:
+        raise Error(err)
+    outcount += 1
+
+def say_old(text):
     global outcount
     text = text.replace('"','')
     cmd = """osascript<<END
