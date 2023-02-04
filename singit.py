@@ -15,7 +15,7 @@ parser.add_argument('midifile', help="MIDI file")
 args = parser.parse_args()
 
 LYRIC_TYPES = ['lyrics', 'text']
-VOCAL_TRACK_NAMES = ['melody', 'lead vocal', 'lead', 'vocal', 'vocals', 'main  melody track',
+VOCAL_TRACK_NAMES = ['melody', 'melody / lyrics', 'lead vocal', 'lead', 'vocal', 'vocals', 'main  melody track',
     'voice',
     'bonnie tyler singing', 'melody/vibraphone', 'vocal1']
 melody_track_idx = -2
@@ -37,7 +37,8 @@ def say(text):
         cmd = """say "%s" using "%s" modulation 0 saving to "%s" """ % (text, voice, output_file%outcount)
     code,response,err = osascript.run(cmd)
     if err:
-        raise Error(err)
+        print("ERROR", err)
+        raise Exception(err)
     outcount += 1
 
 def say_old(text):
@@ -71,7 +72,7 @@ def sing_track(track, channels=None, msgs=None, type=None):
             continue
         if msgs and not msg in msgs:
             continue
-        #print(t,msg)
+        print(t,msg)
         if msg.type == 'note_on' and msg.velocity > 0:
                 #if output_file!='' and (t-note_t0) > 0:
                 #    s += '[[slnc %d]]' % (1000*(t-note_t0))
@@ -97,9 +98,9 @@ for fn in [args.midifile]:
     print(fn)
     mid = mido.MidiFile(fn)
     sing_type = 'lyrics'
+    sing_track_idx = -1
+    sing_channel = -1
     for i, track in enumerate(mid.tracks):
-        sing_track_idx = -1
-        sing_channel = -1
         print(('Track {}: {}'.format(i, track.name)))
         track_msgs = []
         for msg in track:
@@ -111,9 +112,9 @@ for fn in [args.midifile]:
                 or i == melody_track_idx
                 or track.name.strip().lower() in VOCAL_TRACK_NAMES):
                 sing_channel = msg.channel
-        if sing_channel >= 0:
-            print("Singing track %d channel %d, %s" % (sing_track_idx, sing_channel, sing_type))
-            sing_track(mid, type=sing_type, channels=[sing_channel])
+    if sing_channel >= 0:
+        print("Singing track %d channel %d, %s" % (sing_track_idx, sing_channel, sing_type))
+        sing_track(mid, type=sing_type, channels=[sing_channel])
 
 #print "*** Sing track", sing_track, "channel", sing_channel
 
